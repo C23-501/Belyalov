@@ -5,6 +5,7 @@ USE ieee.std_logic_arith.all;
 
 ENTITY SerDes_8 IS
   PORT (
+    -- SerDes
     nRst       :  in   std_logic;
     CLK        :  in   std_logic;
     SerEn      :  in   std_logic;
@@ -13,7 +14,10 @@ ENTITY SerDes_8 IS
     DesEn      :  in   std_logic;
     DesDataIn  :  in   std_logic;
     DesDataOut :  out  std_logic_vector(7 downto 0);
-    DesSTB     :  out  std_logic
+    DesSTB     :  out  std_logic;
+    -- LEDs
+    Rst_LED    :  in   std_logic;
+    LED_ctr    :  out  std_logic_vector(7 downto 0)
   );
 END ENTITY SerDes_8;
 
@@ -28,10 +32,16 @@ ARCHITECTURE rtl OF SerDes_8 IS
   signal SerCounter   :  std_logic_vector(2 downto 0);
   signal DesCounter   :  std_logic_vector(2 downto 0);
   --
+  signal LED_counter  :  std_logic_vector(19 downto 0);
+  signal LED_quarters :  std_logic_vector(1 downto 0);
+  signal LED_r        :  std_logic_vector(7 downto 0);
+  signal quarter_flag :  std_logic;
+  --
 BEGIN
   --
   SerDataOut <= SerDataOut_r(7);
   DesDataOut <= DesDataOut_r;
+  LED_ctr <= LED_r;
   --
   process (nRst, CLK) is
   begin
@@ -90,6 +100,59 @@ BEGIN
         DesSTB <= '1';
       else
         DesSTB <= '0';
+      end if;
+    end if;
+  end process;
+  --
+  LED_process : process (nRst, CLK) is
+  begin
+    if (Rst_LED = '1') then
+      LED_counter <= conv_std_logic_vector(600000, LED_counter'length);
+      LED_quarters <= (others => '1');
+      LED_r <= (others => '0');
+      quarter_flag <= '0';
+    elsif (rising_edge(CLK)) then
+      --  LED_counter
+      if (LED_counter = conv_std_logic_vector(0, LED_counter'length)) then
+        LED_counter <= conv_std_logic_vector(600000, LED_counter'length);
+      else
+        LED_counter <= LED_counter - '1';
+      end if;
+      --  quater_flag
+      if (LED_counter = conv_std_logic_vector(0, LED_counter'length)) then
+        if (LED_quarters = conv_std_logic_vector(0, LED_quarters'length) or LED_quarters = conv_std_logic_vector(3, LED_quarters'length)) then
+          quarter_flag <= not quarter_flag;
+        end if;
+      end if;
+      --  LED_quarters
+      if (LED_counter = conv_std_logic_vector(0, LED_counter'length)) then
+        if (LED_quarters = conv_std_logic_vector(0, LED_quarters'length)) then
+            LED_quarters <= conv_std_logic_vector(1, LED_quarters'length);
+        elsif (LED_quarters = conv_std_logic_vector(3, LED_quarters'length)) then
+           LED_quarters <= conv_std_logic_vector(2, LED_quarters'length);
+        else
+          if (quarter_flag = '0') then
+            LED_quarters <= LED_quarters + '1';
+          else
+            LED_quarters <= LED_quarters - '1';
+          end if;
+        end if;
+      end if;
+      --  LED_r
+      if (LED_quarters = conv_std_logic_vector(0, LED_quarters'length)) then
+        LED_r(1 downto 0) <= (others => '1');
+        LED_r(7 downto 2) <= (others => '0');
+      elsif (LED_quarters = conv_std_logic_vector(1, LED_quarters'length)) then
+        LED_r(1 downto 0) <= (others => '0');
+        LED_r(3 downto 2) <= (others => '1');
+        LED_r(7 downto 4) <= (others => '0');
+      elsif (LED_quarters = conv_std_logic_vector(2, LED_quarters'length)) then
+        LED_r(3 downto 0) <= (others => '0');
+        LED_r(5 downto 4) <= (others => '1');
+        LED_r(7 downto 6) <= (others => '0');
+      else
+        LED_r(5 downto 0) <= (others => '0');
+        LED_r(7 downto 6) <= (others => '1');
       end if;
     end if;
   end process;
