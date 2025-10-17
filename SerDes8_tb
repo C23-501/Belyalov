@@ -1,0 +1,88 @@
+LIBRARY ieee;
+USE ieee.std_logic_1164.ALL;
+USE ieee.std_logic_arith.ALL;
+USE ieee.std_logic_unsigned.ALL;
+
+ENTITY SerDes_8_tb IS
+-- Declarations
+
+END SerDes_8_tb ;
+
+ARCHITECTURE struct OF SerDes_8_tb IS
+
+   -- Architecture declarations
+
+   -- Internal signal declarations
+   SIGNAL CLK        : std_logic;
+   SIGNAL DesDataIn  : std_logic;
+   SIGNAL DesDataOut : std_logic_vector(7 DOWNTO 0);
+   SIGNAL DesEn      : std_logic;
+   SIGNAL DesSTB     : std_logic;
+   SIGNAL LED_ctr    : std_logic_vector(7 DOWNTO 0);
+   SIGNAL SerDataIn  : std_logic_vector(7 DOWNTO 0);
+   SIGNAL SerDataOut : std_logic;
+   SIGNAL SerEn      : std_logic;
+   SIGNAL nRst       : std_logic;
+
+
+   -- Component Declarations
+   COMPONENT SerDes_8
+   PORT (
+      CLK        : IN     std_logic;
+      DesDataIn  : IN     std_logic;
+      DesEn      : IN     std_logic;
+      SerDataIn  : IN     std_logic_vector (7 DOWNTO 0);
+      SerEn      : IN     std_logic;
+      nRst       : IN     std_logic;
+      DesDataOut : OUT    std_logic_vector (7 DOWNTO 0);
+      DesSTB     : OUT    std_logic;
+      LED_ctr    : OUT    std_logic_vector (7 DOWNTO 0);
+      SerDataOut : OUT    std_logic
+   );
+   END COMPONENT;
+   COMPONENT SerDes_8_tester
+   PORT (
+      DesDataOut : IN     std_logic_vector (7 DOWNTO 0);
+      DesSTB     : IN     std_logic ;
+      LED_ctr    : IN     std_logic_vector (7 DOWNTO 0);
+      SerDataOut : IN     std_logic ;
+      CLK        : OUT    std_logic ;
+      DesDataIn  : OUT    std_logic ;
+      DesEn      : OUT    std_logic ;
+      SerDataIn  : OUT    std_logic_vector (7 DOWNTO 0);
+      SerEn      : OUT    std_logic ;
+      nRst       : OUT    std_logic 
+   );
+   END COMPONENT;
+
+BEGIN
+
+   -- Instance port mappings.
+   U_0 : SerDes_8
+      PORT MAP (
+         nRst       => nRst,
+         CLK        => CLK,
+         SerEn      => SerEn,
+         SerDataIn  => SerDataIn,
+         SerDataOut => SerDataOut,
+         DesEn      => DesEn,
+         DesDataIn  => DesDataIn,
+         DesDataOut => DesDataOut,
+         DesSTB     => DesSTB,
+         LED_ctr    => LED_ctr
+      );
+   U_1 : SerDes_8_tester
+      PORT MAP (
+         DesDataOut => DesDataOut,
+         DesSTB     => DesSTB,
+         LED_ctr    => LED_ctr,
+         SerDataOut => SerDataOut,
+         CLK        => CLK,
+         DesDataIn  => DesDataIn,
+         DesEn      => DesEn,
+         SerDataIn  => SerDataIn,
+         SerEn      => SerEn,
+         nRst       => nRst
+      );
+
+END struct;
