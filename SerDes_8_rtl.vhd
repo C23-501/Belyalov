@@ -16,7 +16,6 @@ ENTITY SerDes_8 IS
     DesDataOut :  out  std_logic_vector(7 downto 0);
     DesSTB     :  out  std_logic;
     -- LEDs
-    Rst_LED    :  in   std_logic;
     LED_ctr    :  out  std_logic_vector(7 downto 0)
   );
 END ENTITY SerDes_8;
@@ -106,7 +105,7 @@ BEGIN
   --
   LED_process : process (nRst, CLK) is
   begin
-    if (Rst_LED = '1') then
+    if (nRst = '0') then
       LED_counter <= conv_std_logic_vector(600000, LED_counter'length);
       LED_quarters <= (others => '1');
       LED_r <= (others => '0');
@@ -118,7 +117,7 @@ BEGIN
       else
         LED_counter <= LED_counter - '1';
       end if;
-      --  quater_flag
+      --  quarter_flag
       if (LED_counter = conv_std_logic_vector(0, LED_counter'length)) then
         if (LED_quarters = conv_std_logic_vector(0, LED_quarters'length) or LED_quarters = conv_std_logic_vector(3, LED_quarters'length)) then
           quarter_flag <= not quarter_flag;
