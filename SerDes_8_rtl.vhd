@@ -31,7 +31,7 @@ ARCHITECTURE rtl OF SerDes_8 IS
   signal SerCounter   :  std_logic_vector(2 downto 0);
   signal DesCounter   :  std_logic_vector(2 downto 0);
   --
-  signal LED_counter  :  std_logic_vector(19 downto 0);
+  signal LED_counter  :  std_logic_vector(23 downto 0);
   signal LED_quarters :  std_logic_vector(1 downto 0);
   signal LED_r        :  std_logic_vector(7 downto 0);
   signal quarter_flag :  std_logic;
@@ -46,11 +46,15 @@ BEGIN
   begin
     if (nRst = '0') then
       SerDataOut_r <= (others => '0');
-      DesCounter <= conv_std_logic_vector(7, DesCounter'length);
-      SerCounter <= conv_std_logic_vector(7, SerCounter'length);
+      --DesCounter <= conv_std_logic_vector(7, DesCounter'length);
+      --SerCounter <= conv_std_logic_vector(7, SerCounter'length);
+		DesCounter <= (others => '0');
+      SerCounter <= (others => '0');
       DesDataOut_r <= (others => '0');
       DesShift_r <= (others => '0');
       DesSTB <= '0';
+		SerEn_r <= '0';
+      DesEn_r <= '0';
      elsif (rising_edge(CLK)) then
       SerEn_r <= SerEn;
       DesEn_r <= DesEn;
@@ -106,18 +110,18 @@ BEGIN
   LED_process : process (nRst, CLK) is
   begin
     if (nRst = '0') then
-      LED_counter <= conv_std_logic_vector(600000, LED_counter'length);
+      LED_counter <= (others => '0');
       LED_quarters <= (others => '1');
       LED_r <= (others => '0');
       quarter_flag <= '0';
     elsif (rising_edge(CLK)) then
       --  LED_counter
       if (LED_counter = conv_std_logic_vector(0, LED_counter'length)) then
-        LED_counter <= conv_std_logic_vector(600000, LED_counter'length);
+        LED_counter <= conv_std_logic_vector(2400000, LED_counter'length);
       else
         LED_counter <= LED_counter - '1';
       end if;
-      --  quarter_flag
+      --  quater_flag
       if (LED_counter = conv_std_logic_vector(0, LED_counter'length)) then
         if (LED_quarters = conv_std_logic_vector(0, LED_quarters'length) or LED_quarters = conv_std_logic_vector(3, LED_quarters'length)) then
           quarter_flag <= not quarter_flag;
