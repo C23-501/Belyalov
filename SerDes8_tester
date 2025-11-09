@@ -1,0 +1,225 @@
+LIBRARY ieee;
+USE ieee.std_logic_1164.ALL;
+USE ieee.std_logic_arith.ALL;
+USE ieee.std_logic_unsigned.ALL;
+
+ENTITY SerDes_8_tester IS
+   PORT( 
+      DesDataOut : IN     std_logic_vector (7 DOWNTO 0);
+      DesSTB     : IN     std_logic;
+      LED_ctr    : IN     std_logic_vector (7 DOWNTO 0);
+      SerDataOut : IN     std_logic;
+      CLK        : OUT    std_logic;
+      DesDataIn  : OUT    std_logic;
+      DesEn      : OUT    std_logic;
+      SerDataIn  : OUT    std_logic_vector (7 DOWNTO 0);
+      SerEn      : OUT    std_logic;
+      nRst       : OUT    std_logic
+   );
+
+-- Declarations
+
+END SerDes_8_tester ;
+
+ARCHITECTURE flow OF SerDes_8_tester IS
+
+   -- Architecture declarations
+   signal int_clk : std_logic := '0';
+   CONSTANT CLK_PRD: time := 83.33333333333 ns;
+   --
+   PROCEDURE wait_clock(CONSTANT clk_ticks : integer) IS
+   BEGIN
+     FOR i in 0 to clk_ticks LOOP
+       wait until(rising_edge(CLK));
+       wait for 300 ps;
+     END LOOP;
+   END wait_clock;
+   
+   PROCEDURE div_tests(signal nRst : out std_logic; signal SerEn : out std_logic; signal DesEn : out std_logic) IS
+   BEGIN
+       nRst <= '0';
+       SerEn <= '0';
+       DesEn <= '0';
+       wait_clock(7);
+       nRst <= '1';
+       wait_clock(2);
+   END div_tests;
+   --
+   signal Data_des : std_logic_vector(7 downto 0);
+   signal Data_ser : std_logic_vector(7 downto 0);
+   signal next_new_data : std_logic;
+
+BEGIN
+
+   -----------------------------------------------------------------
+   enablers_proc : PROCESS
+   -----------------------------------------------------------------
+   BEGIN
+      nRst <= '0';
+      SerEn <= '0';
+      DesEn <= '0';
+      wait_clock(3);
+      nRst <= '1';
+      wait_clock(6);
+      div_tests(nRst, SerEn, DesEn);
+      SerEn <= '1';
+      DesEn <= '0';
+      wait_clock(24);
+      div_tests(nRst, SerEn, DesEn);
+      SerEn <= '0';
+      DesEn <= '1';
+      wait_clock(25);
+      div_tests(nRst, SerEn, DesEn);
+      SerEn <= '1';
+      DesEn <= '1';
+      wait_clock(16);
+      div_tests(nRst, SerEn, DesEn);
+      SerEn <= '0';
+      DesEn <= '1';
+      wait until(DesSTB = '1');
+      wait until(next_new_data = '1');
+      DesEn <= '0';
+      wait_clock(0);
+      DesEn <= '1';
+      wait_clock(11);
+      div_tests(nRst, SerEn, DesEn);
+      SerEn <= '1';
+      DesEn <= '1';
+      wait until(DesSTB = '1');
+      wait until(next_new_data = '1');
+      DesEn <= '0';
+      wait_clock(0);
+      DesEn <= '1';
+      wait_clock(11);
+      div_tests(nRst, SerEn, DesEn);
+      DesEn <= '1';
+      wait until(DesSTB = '1');
+      SerEn <= '1';
+      wait_clock(9);
+      div_tests(nRst, SerEn, DesEn);
+      SerEn <= '1';
+      wait_clock(0);
+      DesEn <= '1';
+      wait_clock(10);
+      DesEn <= '0';
+      SerEn <= '0';
+      nRst <= '0';
+      wait_clock(0);
+      nRst <= '1';
+      wait;
+   END PROCESS enablers_proc;
+
+   -----------------------------------------------------------------
+   serdata_proc : PROCESS
+   -----------------------------------------------------------------
+   BEGIN
+      SerDataIn <= (others => '0');
+      Data_ser <= x"A5";
+      wait until(nRst = '1');
+      wait until(nRst = '1');
+      wait_clock(2);
+      SerDataIn <= Data_ser;
+      wait_clock(7);
+      Data_ser <= Data_ser + "11";
+      SerDataIn <= SerDataIn + "11";
+      wait until(nRst = '1');
+      wait until(nRst = '1');
+      wait_clock(2);
+      Data_ser <= x"8B";
+      SerDataIn <= Data_ser;
+      wait until(nRst = '1');
+      wait until(nRst = '1');
+      wait_clock(2);
+      SerDataIn <= Data_ser;
+      wait_clock(20);
+      wait until(nRst = '1');
+      wait until(DesSTB = '1');
+      wait for 400 ps;
+      SerDataIn <= DesDataOut;
+      wait_clock(8);
+      SerDataIn <= DesDataOut;
+      wait until(nRst = '1');
+      wait_clock(2);
+      Data_ser <= x"A6";
+      SerDataIn <= Data_des;
+      wait;
+   END PROCESS serdata_proc;
+
+   -----------------------------------------------------------------
+   desdata_proc : PROCESS
+   -----------------------------------------------------------------
+   BEGIN
+      DesDataIn <= '0';
+      Data_des <= x"94";
+      next_new_data <= '0';
+      wait until(nRst = '1');
+      wait until(nRst = '1');
+      wait until(nRst = '1');
+      wait_clock(2);
+      for j in 2 downto 0 loop
+        for i in 7 downto 0 loop
+          DesDataIn <= Data_des(i);
+          wait_clock(0);
+        end loop;
+        Data_des <= Data_des + "11";
+      end loop;
+      Data_des <= x"B4";
+      wait until(nRst = '1');
+      wait_clock(2);
+      for i in 7 downto 0 loop
+          DesDataIn <= Data_des(i);
+          wait_clock(0);
+      end loop;
+      wait until(nRst = '1');
+      Data_des <= x"C7";
+      for j in 2 downto 0 loop
+        for i in 7 downto 0 loop
+          DesDataIn <= Data_des(i);
+          if (i = 0) then
+              next_new_data <= '1';
+          else
+              next_new_data <= '0';
+          end if;
+          wait_clock(0);
+        end loop;
+      end loop;
+      DesDataIn <= '0';
+      wait until(nRst = '1');
+      Data_des <= x"54";
+      for j in 2 downto 0 loop
+        for i in 7 downto 0 loop
+          DesDataIn <= Data_des(i);
+           if (i = 0) then
+              next_new_data <= '1';
+          else
+              next_new_data <= '0';
+          end if;
+          wait_clock(0);
+        end loop;
+      end loop;
+      Data_des <= Data_des + "111";
+      wait until(nRst = '1');
+      wait_clock(2);
+      for j in 2 downto 0 loop
+        for i in 7 downto 0 loop
+          DesDataIn <= Data_des(i);
+          wait_clock(0);
+        end loop;
+        Data_des <= Data_des + '1';
+      end loop;
+      DesDataIn <= '0';
+      wait until(nRst = '1');
+      while nRst = '1' loop
+          wait until(SerDataOut = '1');
+          DesDataIn <= '1';
+          wait until(SerDataOut = '0');
+          DesDataIn <= '0';
+      end loop;
+      wait;
+   END PROCESS desdata_proc;
+
+-- Architecture concurrent statements
+int_clk <= not int_clk AFTER CLK_PRD / 2;
+CLK <= int_clk;
+
+END flow;
