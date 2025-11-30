@@ -71,6 +71,7 @@ ARCHITECTURE rtl OF SubSys_Controller IS
   signal Init_counter : std_logic_vector(integer(floor(log2(real(INIT_COUNTER_MAX)))) downto 0);
   signal MRSet_counter : std_logic_vector(1 downto 0);
   signal Ref_cycles_counter : std_logic_vector(2 downto 0);
+  signal MRSetDone : std_logic;
 
   -- Mode Register value (A[11:0]) для команды Load Mode Register
   signal MR_value : std_logic_vector(11 downto 0);
@@ -97,7 +98,132 @@ BEGIN
   A <= A_s;
   State_out <= State;
   --
+  -------------------  Mode Register ----------------------------
+  -- Burst Length
+  MR_value(2 downto 0) <= "000" when burst_length = 1 else
+                          "001" when burst_length = 2 else
+                          "010" when burst_length = 4 else
+                          "011" when burst_length = 8 else
+                          "111" when burst_length = 256 else
+                          "000";
 
+  -- Addressing mode (Sequential)
+  MR_value(3) <= '0';
+
+  -- CAS Latency
+  MR_value(6 downto 4) <= "010" when cas_latency = 2 else
+                          "011" when cas_latency = 3 else
+                          "000";
+
+  -- Write mode (Burst read and burst write)
+  MR_value(9) <= '0';
+
+  -- Reserved
+  MR_value(8 downto 7)   <= "00";
+  MR_value(11 downto 10) <= "00";
+
+  ---------------------------------------------------------------
+
+  States : process(nRst, CLK)
+  begin
+    if (nRst = '0') then
+      State <= Idle;
+    elsif rising_edge(CLK) then
+      case State is
+        
+            ----------------------------------------------------------------------
+            -- IDLE
+            ----------------------------------------------------------------------
+            when Idle =>
+                -- Переход в Ctr_request, когда Init_counter = 0
+                if Init_counter = conv_std_logic_vector(0, Init_counter'length) then
+                    State <= Ctr_request;
+                else
+                    State <= Idle;
+                end if;
+
+            ----------------------------------------------------------------------
+            -- Ctr_request
+            ----------------------------------------------------------------------
+            when Ctr_request =>
+                -- Переход возможен только когда StateFSM = Waiting
+                if StateFSM = Waiting then
+                    -- Precharge
+                    if (PrechargeDone_flag = '0' or MRSetDone = '0') then
+                        State <= Precharge;
+                    -- Refresh
+                    elsif (PrechargeDone_flag = '1' and Ref_time_counter = conv_std_logic_vector(0, Ref_time_counter'length)) then
+                        State <= Refresh;
+                    else
+                        State <= Ctr_request;
+                    end if;
+                else
+                    State <= Ctr_request;
+                end if;
+
+            ----------------------------------------------------------------------
+            -- Precharge
+            ----------------------------------------------------------------------
+            when Precharge =>
+                -- Переход только при PrechargeActive_clock = 0
+                if PrechargetoActive_counter = conv_std_logic_vector(0, PrechargetoActive_counter'length) then
+                    -- SetMR
+                    if MRSetDone = '0' then
+                        State <= SetMR;
+                    -- Refresh
+                    elsif Ref_time_counter = conv_std_logic_vector(0, Ref_time_counter'length) then
+                        State <= Refresh;
+                    else
+                        State <= ValidOP;
+                    end if;
+                else
+                    State <= Precharge;
+                end if;
+
+            ----------------------------------------------------------------------
+            -- SetMR
+            ----------------------------------------------------------------------
+            when SetMR =>
+                -- SetMR -> Refresh если MRSet_counter = 0
+                if MRSet_counter = conv_std_logic_vector(0, MRSet_counter'length) then
+                    State <= Refresh;
+                else
+                    State <= SetMR;
+                end if;
+
+            ----------------------------------------------------------------------
+            -- Refresh
+            ----------------------------------------------------------------------
+            when Refresh =>
+                -- Refresh -> ValidOp
+                if Ref_cycles_counter = conv_std_logic_vector(0, Ref_cycles_counter'length) and
+                   Ref_clk_counter  = conv_std_logic_vector(0, Ref_clk_counter'length) then
+                    State <= ValidOp;
+                else
+                    State <= Refresh;
+                end if;
+
+            ----------------------------------------------------------------------
+            -- ValidOp
+            ----------------------------------------------------------------------
+            when ValidOp =>
+                -- ValidOp -> Ctr_request
+                if (Ref_time_counter = conv_std_logic_vector(0, Ref_time_counter'length)) or
+                   ((StateFSM /= PrevStateFSM) and
+                    (PrevStateFSM = Reading or PrevStateFSM = Writing) and
+                    PrechargeDone_flag = '0') then
+                    State <= Ctr_request;
+                else
+                    State <= ValidOp;
+                end if;
+
+            when others =>
+                State <= Idle;
+
+        end case;
+    end if;
+end process;
+  
   --------------------------------------------------------------------
   -- Основная логика: инициализация / refresh / precharge
   --------------------------------------------------------------------
@@ -108,6 +234,7 @@ BEGIN
     if (nRst = '0') then
       -- внутренняя логика
       Init_counter <= conv_std_logic_vector(INIT_COUNTER_MAX, Init_counter'length);
+      MRSetDone <= '0';
     elsif (rising_edge(CLK)) then
       PrevStateFSM <= StateFSM;
       PrevState <= State;
@@ -129,6 +256,10 @@ BEGIN
         CSRefChange_flag <= '1';
       else
         CSRefChange_flag <= '0';
+      end if;
+      --  MRSetDone
+      if (MRSet_counter = conv_std_logic_vector(0, MRSet_counter'length)) then
+        MRSetDone <= '1';
       end if;
       
 ------------------------------------------------------------------------------------------------------------- Счётчики
