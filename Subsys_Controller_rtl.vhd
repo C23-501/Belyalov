@@ -8,32 +8,34 @@ LIBRARY Controller_of_engine_lib;
 USE Controller_of_engine_lib.My_Package.ALL;
 
 ENTITY SubSys_Controller IS
-  GENERIC( 
+   GENERIC( 
       Burst_length : integer := 8;
-      CAS_Latency : integer := 3;
+      CAS_Latency  : integer := 3;
       CLK_Freq_MHz : integer := 160
-  );
-  
-  PORT(
-    -- Общие
-    nRst : in std_logic;
-    CLK  : in std_logic;
-    -- Входы с FSM
-    StateFSM : in StateFSM_type;
-    BS_FSM   : in std_logic_vector(1 downto 0);
-    A_FSM    : in std_logic_vector(11 downto 0);
-    -- Выходы на арбитр
-    nCS         : out std_logic;
-    nRAS        : out std_logic;
-    nCAS        : out std_logic;
-    nWE         : out std_logic;
-    CKE         : out std_logic;
-    DQM         : out std_logic;
-    BS          : out std_logic_vector(1 downto 0);
-    A           : out std_logic_vector(11 downto 0);
-    State_out   : out StateSubsys_type
-  );
-END ENTITY SubSys_Controller;
+   );
+   PORT( 
+      -- Общие
+      nRst      : IN     std_logic;
+      CLK       : IN     std_logic;
+      -- Входы с FSM
+      StateFSM  : IN     StateFSM_type;
+      BS_FSM    : IN     std_logic_vector (1 DOWNTO 0);
+      A_FSM     : IN     std_logic_vector (11 DOWNTO 0);
+      -- Выходы на арбитр
+      nCS       : OUT    std_logic;
+      nRAS      : OUT    std_logic;
+      nCAS      : OUT    std_logic;
+      nWE       : OUT    std_logic;
+      CKE       : OUT    std_logic;
+      DQM       : OUT    std_logic;
+      BS        : OUT    std_logic_vector (1 DOWNTO 0);
+      A         : OUT    std_logic_vector (11 DOWNTO 0);
+      State_out : OUT    StateSubsys_type
+   );
+
+-- Declarations
+
+END SubSys_Controller ;
 
 --
 ARCHITECTURE rtl OF SubSys_Controller IS
@@ -43,19 +45,12 @@ ARCHITECTURE rtl OF SubSys_Controller IS
   signal PrevState       :  StateSubsys_type;
   signal PrevStateFSM    :  StateFSM_type;
   
-  -- out
-  signal nCS_s           :  std_logic;
-  signal nRAS_s          :  std_logic;
-  signal nCAS_s          :  std_logic;
-  signal nWE_s           :  std_logic;
-  signal CKE_s           :  std_logic;
-  signal DQM_s           :  std_logic;
-  signal BS_s            :  std_logic_vector(1 downto 0);
-  signal A_s             :  std_logic_vector(11 downto 0);
+  -- constants
 
   constant CLK_PRD_ns : real := 1000.0 / real(CLK_Freq_MHz);
   constant REF_TIME : integer := integer(64_000_000.0 / (4096.0 * CLK_PRD_ns));
   constant INIT_COUNTER_MAX : integer := integer(200_000.0 / CLK_PRD_ns);
+  constant Addr_default : std_logic_vector(11 downto 0) := "010000000000";
 
   signal CSRefChange_flag : std_logic;
   
@@ -88,15 +83,15 @@ BEGIN
     report "CLK_Freq_MHz must be positive" severity error;
   --
   --
-  nCS <= nCS_s;
-  nRAS <= nRAS_s;
-  nCAS <= nCAS_s;
-  nWE <= nWE_s;
-  CKE <= CKE_s;
-  DQM <= DQM_s;
-  BS <= BS_s;
-  A <= A_s;
   State_out <= State;
+  nCS <= '0' when (State /= PrevState and State /= Idle and State /= ValidOp) or CSRefChange_flag = '1' else '1';
+  nRAS <= '0' when State = Precharge or State = Refresh or State = SetMR else '1';
+  nCAS <= '0' when State = SetMR or State = Refresh else '1';
+  nWE <= '0' when State = SetMR or State = Precharge else '1';
+  A <= MR_value when State = SetMR else Addr_default;
+  BS <= (others => '0');
+  CKE <= '1';
+  DQM <= '1';
   --
   -------------------  Mode Register ----------------------------
   -- Burst Length
@@ -289,7 +284,7 @@ end process;
       else
         Ref_cycles_counter <= conv_std_logic_vector(0, Ref_cycles_counter'length);
       end if;
-      --  PrechargetoActive_clock  (счётчик времени от precharge до active - tRP)
+      --  PrechargetoActive_counter  (счётчик времени от precharge до active - tRP)
       if (State = Precharge) then
         PrechargetoActive_counter <= PrechargetoActive_counter - '1';
       else
@@ -310,46 +305,4 @@ end process;
     end if;
   end process;
 
-  Main_scheme_logic : process(State, PrevState, CSRefChange_flag, nCS_s, nRAS_s, nCAS_s, nWE_s, A_s, BS_s, CKE_s, DQM_s) is
-  begin
-    -- nCS_s
-    if ((State /= PrevState and State /= Idle and State /= ValidOp) or CSRefChange_flag = '1') then
-      nCS_s <= '0';
-    else
-      nCS_s <= '1';
-    end if;
-    -- nRAS_s
-    if (State = Precharge or State = Refresh or State = SetMR) then
-      nRAS_s <= '0';
-    else
-      nRAS_s <= '1';
-    end if;
-    -- nCAS_s
-    if (State = SetMR or State = Refresh) then
-      nCAS_s <= '0';
-    else
-      nCAS_s <= '1';
-    end if;
-    -- nWE_s
-    if (State = SetMR or State = Precharge) then
-      nWE_s <= '0';
-    else
-      nWE_s <= '1';
-    end if;
-    -- A_s
-    if (State = SetMR) then
-      A_s <= MR_value;
-    else
-      A_s(9 downto 0) <= (others => '0');
-      A_s(10) <= '1';
-      A_s(11) <= '0';
-    end if;
-    --BS_s
-    BS_s <= (others => '0');
-    -- CKE_s
-    CKE_s <= '1';
-    -- DQM_s
-    DQM_s <= '1';
-    
-  end process;
 END ARCHITECTURE rtl;
