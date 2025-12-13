@@ -47,9 +47,8 @@ ARCHITECTURE rtl OF SubSys_Controller IS
   
   -- constants
 
-  constant CLK_PRD_ns : real := 1000.0 / real(CLK_Freq_MHz);
-  constant REF_TIME : integer := integer(64_000_000.0 / (4096.0 * CLK_PRD_ns));
-  constant INIT_COUNTER_MAX : integer := integer(200_000.0 / CLK_PRD_ns);
+  constant REF_TIME : integer := 64_000 * CLK_Freq_MHz / 4096;
+  constant INIT_COUNTER_MAX : integer := 200 * CLK_Freq_MHz;
   constant Addr_default : std_logic_vector(11 downto 0) := "010000000000";
 
   signal CSRefChange_flag : std_logic;
@@ -61,10 +60,9 @@ ARCHITECTURE rtl OF SubSys_Controller IS
   
   -- precharge
   signal PrechargeDone_flag :  std_logic;
-  signal PrechargetoActive_counter : std_logic_vector(1 downto 0);
+  signal PrechargetoActive_r : std_logic;
   
   -- Инициализация SDRAM
-  signal MRSet_counter : std_logic_vector(1 downto 0);
   signal Ref_cycles_counter : std_logic_vector(2 downto 0);
   signal MRSetDone : std_logic;
 
@@ -84,7 +82,7 @@ BEGIN
   --
   --
   State_out <= State;
-  nCS <= '0' when (State /= PrevState and (State = Precharge or State = Refresh or State = SetMR)) or CSRefChange_flag = '1' else '1';
+  nCS <= '0' when State = Refresh or State = Precharge or State = SetMR else '1';
   nRAS <= '0' when State = Precharge or State = Refresh or State = SetMR else '1';
   nCAS <= '0' when State = SetMR or State = Refresh else '1';
   nWE <= '0' when State = SetMR or State = Precharge else '1';
@@ -130,7 +128,7 @@ BEGIN
             -- IDLE
             ----------------------------------------------------------------------
             when Idle =>
-                -- Переход в Ctr_request, когда Init_counter = 0
+                -- Переход в Ctr_request, когда Wait_counter = 0
                 if Wait_counter = conv_std_logic_vector(0, Wait_counter'length) then
                     State <= Ctr_request;
                 else
@@ -158,8 +156,14 @@ BEGIN
             -- Precharge
             ----------------------------------------------------------------------
             when Precharge =>
-                -- Переход только при PrechargeActive_counter = 0
-                if PrechargetoActive_counter = conv_std_logic_vector(0, PrechargetoActive_counter'length) then
+                State <= Waiting_precharge;
+
+            ----------------------------------------------------------------------
+            -- Waiting_precharge
+            ----------------------------------------------------------------------
+            when Waiting_precharge =>
+                -- Переход только при PrechargetoActive_r = '0'
+                if PrechargetoActive_r = '0' then
                     -- SetMR
                     if MRSetDone = '0' then
                         State <= SetMR;
@@ -170,32 +174,39 @@ BEGIN
                         State <= ValidOP;
                     end if;
                 else
-                    State <= Precharge;
+                    State <= Waiting_precharge;
                 end if;
-
+                
             ----------------------------------------------------------------------
             -- SetMR
             ----------------------------------------------------------------------
             when SetMR =>
-                -- SetMR -> Refresh если MRSet_counter = 0
-                if MRSet_counter = conv_std_logic_vector(0, MRSet_counter'length) then
-                    State <= Refresh;
-                else
-                    State <= SetMR;
-                end if;
+                State <= Waiting_SetMR;
+
+            ----------------------------------------------------------------------
+            -- Waiting_SetMR
+            ----------------------------------------------------------------------
+            when Waiting_SetMR =>
+                State <= Refresh;
 
             ----------------------------------------------------------------------
             -- Refresh
             ----------------------------------------------------------------------
             when Refresh =>
-                -- Refresh -> ValidOp
-                if Ref_cycles_counter = conv_std_logic_vector(0, Ref_cycles_counter'length) and
-                   Ref_clk_counter  = conv_std_logic_vector(0, Ref_clk_counter'length) then
-                    State <= ValidOp;
-                else
-                    State <= Refresh;
-                end if;
+                State <= Waiting_refresh;
 
+            ----------------------------------------------------------------------
+            -- Waiting_refresh
+            ----------------------------------------------------------------------
+            when Waiting_refresh =>
+              if (Ref_clk_counter = conv_std_logic_vector(0, Ref_clk_counter'length)) then
+                if (Ref_cycles_counter = conv_std_logic_vector(0, Ref_cycles_counter'length)) then
+                  State <= ValidOp;
+                else
+                  State <= Refresh;
+                end if;
+              end if;
+              
             ----------------------------------------------------------------------
             -- ValidOp
             ----------------------------------------------------------------------
@@ -215,7 +226,7 @@ BEGIN
 
         end case;
     end if;
-end process;
+  end process;
   
   --------------------------------------------------------------------
   -- Основная логика: инициализация / refresh / precharge
@@ -233,6 +244,7 @@ end process;
       PrevState <= Idle;
       Ref_cycles_counter <= conv_std_logic_vector(7, Ref_cycles_counter'length);
       Ref_clk_counter <= conv_std_logic_vector(9, Ref_clk_counter'length);
+      PrechargetoActive_r <= '1';
     elsif (rising_edge(CLK)) then
       PrevStateFSM <= StateFSM;
       PrevState <= State;
@@ -256,13 +268,14 @@ end process;
         CSRefChange_flag <= '0';
       end if;
       --  MRSetDone
-      if (MRSet_counter = conv_std_logic_vector(0, MRSet_counter'length)) then
+      --if (MRSet_counter = conv_std_logic_vector(0, MRSet_counter'length)) then
+      if State = Waiting_SetMR then
         MRSetDone <= '1';
       end if;
       
 ------------------------------------------------------------------------------------------------------------- Счётчики
       --  Wait_counter (счётчик времени до следующего цикла auto-refresh 64 мс / 4096 и счётчик инициализации 200 мкс)
-      if (State /= Refresh) then
+      if (State /= Refresh and State /= Waiting_refresh) then
         if (Wait_counter /= conv_std_logic_vector(0, Wait_counter'length)) then
           Wait_counter <= Wait_counter - '1';
         end if;
@@ -270,34 +283,26 @@ end process;
         Wait_counter <= conv_std_logic_vector(REF_TIME, Wait_counter'length);
       end if;
       --  Ref_clk_counter  (счётчик тактов цикла auto-refresh - tRC)
-      if (State = Refresh) then
+      if (State = Waiting_refresh) then
         if (Ref_clk_counter = conv_std_logic_vector(0, Ref_clk_counter'length)) then
-          Ref_clk_counter <= conv_std_logic_vector(9, Ref_clk_counter'length);
+          Ref_clk_counter <= conv_std_logic_vector(8, Ref_clk_counter'length);
         else
           Ref_clk_counter <= Ref_clk_counter - '1';
         end if;
       else
-        Ref_clk_counter <= conv_std_logic_vector(9, Ref_clk_counter'length);
+        Ref_clk_counter <= conv_std_logic_vector(8, Ref_clk_counter'length);
       end if;
       --  Ref_cycles_counter  (счётчик циклов auto-refresh после установки Mode Register)
-      if (State = Refresh) then
+      if (State = Waiting_refresh) then
         if (Ref_clk_counter = conv_std_logic_vector(0, Ref_clk_counter'length)) then
           Ref_cycles_counter <= Ref_cycles_counter - '1';
         end if;
       elsif (State = ValidOp) then
         Ref_cycles_counter <= conv_std_logic_vector(0, Ref_cycles_counter'length);
       end if;
-      --  PrechargetoActive_counter  (счётчик времени от precharge до active - tRP)
-      if (State = Precharge) then
-        PrechargetoActive_counter <= PrechargetoActive_counter - '1';
-      else
-        PrechargetoActive_counter <= conv_std_logic_vector(2, PrechargetoActive_counter'length);
-      end if;
-      -- MRSet_counter  (счётчик времени между MR set и другой командой - tRSC)
-      if (State = SetMR) then
-        MRSet_counter <= MRSet_counter - '1';
-      else
-        MRSet_counter <= conv_std_logic_vector(1, MRSet_counter'length);
+      -- PrechargetoActive logic (tRP)
+      if (State = Waiting_precharge) then
+        PrechargetoActive_r <= not PrechargetoActive_r;
       end if;
     end if;
   end process;
