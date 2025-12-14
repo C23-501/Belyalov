@@ -16,7 +16,7 @@ ENTITY Controller_SDRAM_arbiter IS
       nCAS_FSM    : IN     std_logic;
       nWE_FSM     : IN     std_logic;
       CKE_FSM     : IN     std_logic;
-      DQM_FSM     : IN     std_logic;
+      DQM_FSM     : IN     std_logic_vector (1 DOWNTO 0);
       BS_FSM      : IN     std_logic_vector (1 DOWNTO 0);
       A_FSM       : IN     std_logic_vector (11 DOWNTO 0);
       --  От подсистемы
@@ -25,7 +25,7 @@ ENTITY Controller_SDRAM_arbiter IS
       nCAS_Subsys : IN     std_logic;
       nWE_Subsys  : IN     std_logic;
       CKE_Subsys  : IN     std_logic;
-      DQM_Subsys  : IN     std_logic;
+      DQM_Subsys  : IN     std_logic_vector(1 DOWNTO 0);
       BS_Subsys   : IN     std_logic_vector (1 DOWNTO 0);
       A_Subsys    : IN     std_logic_vector (11 DOWNTO 0);
       --  Выходы на SDRAM
@@ -34,7 +34,7 @@ ENTITY Controller_SDRAM_arbiter IS
       nCAS        : OUT    std_logic;
       nWE         : OUT    std_logic;
       CKE         : OUT    std_logic;
-      DQM         : OUT    std_logic;
+      DQM         : OUT    std_logic_vector (1 DOWNTO 0);
       BS          : OUT    std_logic_vector (1 DOWNTO 0);
       A           : OUT    std_logic_vector (11 DOWNTO 0)
    );
@@ -51,7 +51,7 @@ ARCHITECTURE rtl OF Controller_SDRAM_arbiter IS
   signal nCAS_r          :  std_logic;
   signal nWE_r           :  std_logic;
   signal CKE_r           :  std_logic;
-  signal DQM_r           :  std_logic;
+  signal DQM_r           :  std_logic_vector(1 downto 0);
   signal BS_r            :  std_logic_vector(1 downto 0);
   signal A_r             :  std_logic_vector(11 downto 0);
   --
@@ -75,7 +75,7 @@ BEGIN
       nCAS_r <= '0';
       nWE_r <= '0';
       CKE_r <= '0';
-      DQM_r <= '0';
+      DQM_r <= "00";
       BS_r <= (others => '0');
       A_r <= (others => '0');
     elsif (rising_edge(CLK)) then
