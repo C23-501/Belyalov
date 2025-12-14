@@ -19,7 +19,6 @@ ENTITY SubSys_Controller IS
       CLK       : IN     std_logic;
       -- Входы с FSM
       StateFSM  : IN     StateFSM_type;
-      BS_FSM    : IN     std_logic_vector (1 DOWNTO 0);
       A_FSM     : IN     std_logic_vector (11 DOWNTO 0);
       -- Выходы на арбитр
       nCS       : OUT    std_logic;
@@ -27,7 +26,7 @@ ENTITY SubSys_Controller IS
       nCAS      : OUT    std_logic;
       nWE       : OUT    std_logic;
       CKE       : OUT    std_logic;
-      DQM       : OUT    std_logic;
+      DQM       : OUT    std_logic_vector(1 DOWNTO 0);
       BS        : OUT    std_logic_vector (1 DOWNTO 0);
       A         : OUT    std_logic_vector (11 DOWNTO 0);
       State_out : OUT    StateSubsys_type
@@ -89,7 +88,7 @@ BEGIN
   A <= MR_value when State = SetMR else Addr_default;
   BS <= (others => '0');
   CKE <= '1';
-  DQM <= '1';
+  DQM <= "11";
   --
   -------------------  Mode Register ----------------------------
   -- Burst Length
