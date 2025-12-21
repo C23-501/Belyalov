@@ -4,8 +4,8 @@ USE ieee.std_logic_unsigned.ALL;
 USE ieee.std_logic_arith.ALL;
 USE ieee.numeric_std.ALL;
 USE ieee.math_real.ALL;
-LIBRARY Controller_of_engine_lib;
-USE Controller_of_engine_lib.My_Package.ALL;
+LIBRARY work;
+USE work.SDRAM_controller_Package.ALL;
 
 ENTITY SubSys_Controller IS
    GENERIC( 
@@ -26,7 +26,7 @@ ENTITY SubSys_Controller IS
       nCAS      : OUT    std_logic;
       nWE       : OUT    std_logic;
       CKE       : OUT    std_logic;
-      DQM       : OUT    std_logic_vector(1 DOWNTO 0);
+      DQM       : OUT    std_logic_vector (1 DOWNTO 0);
       BS        : OUT    std_logic_vector (1 DOWNTO 0);
       A         : OUT    std_logic_vector (11 DOWNTO 0);
       State_out : OUT    StateSubsys_type
@@ -41,7 +41,6 @@ ARCHITECTURE rtl OF SubSys_Controller IS
   
   -- state
   signal State           :  StateSubsys_type := Idle;
-  signal PrevState       :  StateSubsys_type;
   signal PrevStateFSM    :  StateFSM_type;
   
   -- constants
@@ -49,8 +48,6 @@ ARCHITECTURE rtl OF SubSys_Controller IS
   constant REF_TIME : integer := 64_000 * CLK_Freq_MHz / 4096;
   constant INIT_COUNTER_MAX : integer := 200 * CLK_Freq_MHz;
   constant Addr_default : std_logic_vector(11 downto 0) := "010000000000";
-
-  signal CSRefChange_flag : std_logic;
 
   signal Wait_counter : std_logic_vector(integer(floor(log2(real(INIT_COUNTER_MAX)))) downto 0);
   
@@ -239,14 +236,11 @@ BEGIN
       Wait_counter <= conv_std_logic_vector(INIT_COUNTER_MAX, Wait_counter'length);
       MRSetDone <= '0';
       PrechargeDone_flag <= '0';
-      CSRefChange_flag <= '0';
-      PrevState <= Idle;
       Ref_cycles_counter <= conv_std_logic_vector(7, Ref_cycles_counter'length);
       Ref_clk_counter <= conv_std_logic_vector(9, Ref_clk_counter'length);
       PrechargetoActive_r <= '1';
     elsif (rising_edge(CLK)) then
       PrevStateFSM <= StateFSM;
-      PrevState <= State;
       
 ------------------------------------------------------------------------------------------------------------- Флаги
 
@@ -259,12 +253,6 @@ BEGIN
         end if;
       elsif (State = Precharge) then   --  Precharge
         PrechargeDone_flag <= '1';
-      end if;
-      --  CSRefChange_flag
-      if (Ref_clk_counter = conv_std_logic_vector(0, Ref_clk_counter'length) and Ref_cycles_counter /= conv_std_logic_vector(0, Ref_cycles_counter'length)) then
-        CSRefChange_flag <= '1';
-      else
-        CSRefChange_flag <= '0';
       end if;
       --  MRSetDone
       --if (MRSet_counter = conv_std_logic_vector(0, MRSet_counter'length)) then
