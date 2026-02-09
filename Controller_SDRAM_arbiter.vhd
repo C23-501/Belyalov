@@ -1,8 +1,8 @@
 LIBRARY ieee;
 USE ieee.std_logic_1164.all;
 USE ieee.std_logic_arith.all;
-LIBRARY Controller_of_engine_lib;
-USE Controller_of_engine_lib.My_Package.ALL;
+LIBRARY work;
+USE work.SDRAM_controller_Package.ALL;
 
 ENTITY Controller_SDRAM_arbiter IS
    PORT( 
