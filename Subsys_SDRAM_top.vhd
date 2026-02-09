@@ -4,11 +4,13 @@ USE ieee.std_logic_unsigned.ALL;
 USE ieee.std_logic_arith.ALL;
 LIBRARY work;
 USE work.SDRAM_controller_Package.ALL;
+LIBRARY altera_mf;
+USE altera_mf.all;
 
 entity Subsys_SDRAM_top is
 	PORT(
 		nRst : IN std_logic;
-		CLK  : IN std_logic;
+		CLK_12MHz  : IN std_logic;
 		nCS  : OUT    std_logic;
       nRAS : OUT    std_logic;
       nCAS : OUT    std_logic;
@@ -18,6 +20,10 @@ entity Subsys_SDRAM_top is
       BS   : OUT    std_logic_vector (1 DOWNTO 0);
 		A    : OUT std_logic_vector(11 DOWNTO 0);
 		Dq   : OUT std_logic_vector(15 DOWNTO 0);
+		nCS_o: OUT std_logic;
+		nRAS_o: OUT std_logic;
+		nCAS_o: OUT std_logic;
+		nWE_o: OUT std_logic;
 		    -- LEDs
 		LED_ctr    :  out  std_logic_vector(7 downto 0)
 	);
@@ -46,6 +52,15 @@ ARCHITECTURE rtl OF SubSys_SDRAM_top IS
    signal LED_quarters :  std_logic_vector(1 downto 0);
    signal LED_r        :  std_logic_vector(7 downto 0);
    signal quarter_flag :  std_logic;
+	
+	signal nCS_s : std_logic;
+	signal nCAS_s : std_logic;
+	signal nRAS_s : std_logic;
+	signal nWE_s : std_logic;
+	
+	signal CLK_160MHz : std_logic;
+	signal PLL_reset : std_logic;
+	signal nRst_global : std_logic;
 	
 	COMPONENT Controller_SDRAM_arbiter
    PORT (
@@ -108,8 +123,28 @@ ARCHITECTURE rtl OF SubSys_SDRAM_top IS
    );
    END COMPONENT;
 	
+	COMPONENT PLL_i12MHz_o160MHz
+   PORT (
+      areset : IN     STD_LOGIC  := '0';
+      inclk0 : IN     STD_LOGIC  := '0';
+      c0     : OUT    STD_LOGIC;
+      locked : OUT    STD_LOGIC
+   );
+   END COMPONENT;
+	
 	
 BEGIN
+	
+	PLL_reset <= not nRst;
+	-- Выводы
+	nCS_o <= nCS_s;
+	nCAS_o <= nCAS_s;
+	nRAS_o <= nRAS_s;
+	nWE_o <= nWE_s;
+	nCS <= nCS_s;
+	nCAS <= nCAS_s;
+	nRAS <= nRAS_s;
+	nWE <= nWE_s;
 	
 	StateFSM <= Waiting;
 	nCS_FSM <= '1';
@@ -121,14 +156,14 @@ BEGIN
 	A_FSM <= (others => '0');
 	BS_FSM <= "00";
 	
-	Dq <= (others => '0');
+	Dq <= (others => 'Z');
 	
 	LED_ctr <= LED_r;
 	
 	U_2 : Controller_SDRAM_arbiter
       PORT MAP (
-         nRst        => nRst,
-         CLK         => CLK,
+         nRst        => nRst_global,
+         CLK         => CLK_160MHz,
          StateFSM    => StateFSM,
          nCS_FSM     => nCS_FSM,
          nRAS_FSM    => nRAS_FSM,
@@ -146,10 +181,10 @@ BEGIN
          DQM_Subsys  => DQM_Subsys,
          BS_Subsys   => BS_Subsys,
          A_Subsys    => A_Subsys,
-         nCS         => nCS,
-         nRAS        => nRAS,
-         nCAS        => nCAS,
-         nWE         => nWE,
+         nCS         => nCS_s,
+         nRAS        => nRAS_s,
+         nCAS        => nCAS_s,
+         nWE         => nWE_s,
          CKE         => CKE,
          DQM         => DQM,
          bs          => BS,
@@ -163,8 +198,8 @@ BEGIN
          CLK_Freq_MHz => 160
       )
       PORT MAP (
-         nRst      => nRst,
-         CLK       => CLK,
+         nRst      => nRst_global,
+         CLK       => CLK_160MHz,
          StateFSM  => StateFSM,
          A_FSM     => A_FSM,
          nCS       => nCS_Subsys,
@@ -178,14 +213,22 @@ BEGIN
          State_out => State_out
       );
 		
-  LED_process : process (nRst, CLK) is
+		U_4 : PLL_i12MHz_o160MHz
+      PORT MAP (
+         areset => PLL_reset,
+         inclk0 => CLK_12MHz,
+         c0     => CLK_160MHz,
+         locked => nRst_global
+      );
+		
+  LED_process : process (nRst_global, CLK_160MHz) is
   begin
     if (nRst = '0') then
       LED_counter <= (others => '0');
       LED_quarters <= (others => '1');
       LED_r <= (others => '0');
       quarter_flag <= '0';
-    elsif (rising_edge(CLK)) then
+    elsif (rising_edge(CLK_160MHz)) then
       --  LED_counter
       if (LED_counter = conv_std_logic_vector(0, LED_counter'length)) then
         LED_counter <= conv_std_logic_vector(2400000, LED_counter'length);
